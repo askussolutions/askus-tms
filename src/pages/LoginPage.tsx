@@ -64,10 +64,11 @@ export default function LoginPage() {
     }
   };
 
-  const USERS: Record<string, { password: string; name: string; role: string }> = {
-  rajesh:    { password: 'Rajesh@2026',  name: 'Rajesh',    role: 'admin'    },
-  haripriya: { password: 'Rajesh@2026e', name: 'Haripriya', role: 'employee' },
-  agent:     { password: 'Rajesh@2026a', name: 'Agent',     role: 'agent'    },
+  // USERS object-ல் role capitalize பண்ணுங்க:
+const USERS: Record<string, { password: string; name: string; role: string }> = {
+  rajesh:    { password: 'Rajesh@2026',  name: 'Rajesh Kumar', role: 'Admin'    },
+  haripriya: { password: 'Rajesh@2026e', name: 'Haripriya',    role: 'Employee' },
+  agent:     { password: 'Rajesh@2026a', name: 'Agent',        role: 'Agent'    },
 };
 
 const handleAccountLogin = async () => {
@@ -96,13 +97,17 @@ const handleAccountLogin = async () => {
     message.success(`Welcome, ${matched.name}!`);
     navigate('/dashboard', { replace: true });
   } catch {
-    // Even if mock API fails, allow login with valid credentials
-    dispatch(loginSuccess({ token: 'local-token', user: { name: matched.name, role: matched.role, email } }));
-    message.success(`Welcome, ${matched.name}!`);
-    navigate('/dashboard', { replace: true });
-  } finally {
-    setLoading(false);
-  }
+  dispatch(loginSuccess({ 
+    token: 'local-token', 
+    user: { 
+      name: matched.name, 
+      role: matched.role,  // இப்போ 'Admin' / 'Employee' / 'Agent' properly வரும்
+      email 
+    } 
+  }));
+  message.success(`Welcome, ${matched.name}!`);
+  navigate('/dashboard', { replace: true });
+}
 };
 
   return (

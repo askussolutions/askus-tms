@@ -114,21 +114,6 @@ export default function App() {
               } />
 
               {/* ── Admin only ── */}
-              <Route path="customers" element={
-                <RoleRoute allowed={['Admin']}>
-                  <Placeholder title="Customers" />
-                </RoleRoute>
-              } />
-              <Route path="vehicles" element={
-                <RoleRoute allowed={['Admin']}>
-                  <Placeholder title="Vehicles" />
-                </RoleRoute>
-              } />
-              <Route path="settings" element={
-                <RoleRoute allowed={['Admin']}>
-                  <Placeholder title="Settings" />
-                </RoleRoute>
-              } />
               <Route path="renewals" element={
                 <RoleRoute allowed={['Admin']}>
                   <Placeholder title="Renewals" />

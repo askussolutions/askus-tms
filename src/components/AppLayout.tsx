@@ -1,9 +1,8 @@
 import React from 'react';
 import { Layout, Badge, Dropdown, Button, message, Tag, Tooltip } from 'antd';
 import {
-  DashboardOutlined, AppstoreOutlined, UnorderedListOutlined, BarChartOutlined,
-  SettingOutlined, LogoutOutlined, BellOutlined, PlusOutlined, CalendarOutlined,
-  FileExcelOutlined, TeamOutlined, UserOutlined, LockOutlined,
+  DashboardOutlined, AppstoreOutlined, UnorderedListOutlined, BarChartOutlined, LogoutOutlined, BellOutlined, PlusOutlined, CalendarOutlined,
+  FileExcelOutlined, LockOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -37,9 +36,6 @@ const ALL_NAV: NavItem[] = [
   { path: '/analytics', icon: <BarChartOutlined />,       label: 'Analytics',    roles: ['Admin', 'Employee'] },
   { path: '/calendar',  icon: <CalendarOutlined />,       label: 'Calendar',     roles: ['Admin', 'Employee'], dividerBefore: true },
   { path: '/timesheet', icon: <FileExcelOutlined />,      label: 'Time Sheet',   roles: ['Admin', 'Employee', 'Agent'], dividerBefore: true },
-  { path: '/customers', icon: <TeamOutlined />,           label: 'Customers',    roles: ['Admin'], dividerBefore: true },
-  { path: '/vehicles',  icon: <UserOutlined />,           label: 'Vehicles',     roles: ['Admin'] },
-  { path: '/settings',  icon: <SettingOutlined />,        label: 'Settings',     roles: ['Admin'] },
 ];
 
 export default function AppLayout() {
@@ -116,7 +112,6 @@ export default function AppLayout() {
             { key: 'profile', label: <span><UserOutlined /> {user?.name}</span>, disabled: true },
             { key: 'email',   label: <span style={{ fontSize: 11, color: '#8c8c8c' }}>{user?.email ?? user?.mobile}</span>, disabled: true },
             { type: 'divider' },
-            ...(role === 'Admin' ? [{ key: 'settings', label: 'Settings', onClick: () => navigate('/settings') }, { type: 'divider' as const }] : []),
             { key: 'logout', label: 'Log out', icon: <LogoutOutlined />, danger: true, onClick: doLogout },
           ]}}>
             <div style={{
