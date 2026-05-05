@@ -2,6 +2,9 @@ import insuranceBg from '../assets/insurance-bg.png';
 import React, { useState } from 'react';
 import { message, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { apiClient } from '../api/api';
+import { useAppDispatch } from '../store';
+import { loginSuccess } from '../store';
 
 // ── Password strength checker ─────────────────────────────────────────────────
 interface PasswordRule { label: string; test: (p: string) => boolean; }
@@ -76,6 +79,7 @@ export default function RegisterPage() {
   const [pwdFocus,  setPwdFocus]  = useState(false);
   const [loading,   setLoading]   = useState(false);
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
   const allRulesPassed = PASSWORD_RULES.every(r => r.test(password));
   const passwordMatch  = password === confirm && confirm.length > 0;
@@ -88,10 +92,18 @@ export default function RegisterPage() {
     if (!passwordMatch)  { message.error('Passwords do not match'); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200)); // mock delay
-    setLoading(false);
-    message.success('Registration successful! Please log in.');
-    navigate('/login');
+    try {
+      const res = await apiClient.register(fullName.trim(), email.trim(), mobile, password, role);
+      dispatch(loginSuccess({ token: res.token, user: res.user }));
+      message.success(`Welcome, ${res.user.name}! Account created successfully.`);
+      // Redirect based on role
+      navigate(res.user.role === 'Agent' ? '/timesheet' : '/dashboard', { replace: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Registration failed';
+      message.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

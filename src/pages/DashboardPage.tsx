@@ -88,7 +88,7 @@ export default function DashboardPage() {
     {
       title: 'Status',
       dataIndex: 'status',
-      render: (v: string) => <StatusBadge status={v} />,
+      render: (v: string) => <StatusBadge status={v as import('../types').TicketStatus} />,
     },
     {
       title: '',

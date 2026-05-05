@@ -2,7 +2,7 @@ import React from 'react';
 import { Layout, Badge, Dropdown, Button, message, Tag, Tooltip } from 'antd';
 import {
   DashboardOutlined, AppstoreOutlined, UnorderedListOutlined, BarChartOutlined, LogoutOutlined, BellOutlined, PlusOutlined, CalendarOutlined,
-  FileExcelOutlined, LockOutlined,
+  FileExcelOutlined, LockOutlined, UserOutlined,
 } from '@ant-design/icons';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';

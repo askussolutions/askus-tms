@@ -527,5 +527,107 @@ export default function TimesheetPage() {
     },
   ];
 
-  };
+  const tabItems = [
+    ...(userRole !== 'Agent' ? [{
+      key: 'all',
+      label: <span><TeamOutlined /> All Staff</span>,
+      children: (
+        <div style={{ padding: '0 0 16px' }}>
+          {/* Toolbar */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+            <Select value={filterRole} onChange={setFilterRole} style={{ width: 130 }} size="small"
+              options={[{ label: 'All Roles', value: 'All' }, { label: 'Admin', value: 'Admin' }, { label: 'Employee', value: 'Employee' }, { label: 'Agent', value: 'Agent' }]} />
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <Tooltip title="Fill Mon–Sat with Present / 8h for current week">
+                <Button size="small" icon={<CheckCircleOutlined />} onClick={fillDefaults}>
+                  Fill Defaults
+                </Button>
+              </Tooltip>
+              <Button size="small" icon={<PlusOutlined />} type="primary"
+                style={{ background: '#C8102E', borderColor: '#C8102E' }}
+                onClick={() => setShowAdd(true)}>
+                Add Staff
+              </Button>
+              <Button size="small" icon={<DownloadOutlined />} onClick={() => exportXlsx(visibleRows, dates, weekLabel)}>
+                Export XLSX
+              </Button>
+            </div>
+          </div>
+          <div style={{ marginBottom: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+              <TeamOutlined /> {visibleRows.length} staff &nbsp;·&nbsp;
+              Total hours this week: <strong style={{ color: '#C8102E' }}>{totalHoursAll}h</strong>
+            </span>
+          </div>
+          <Table
+            columns={adminColumns}
+            dataSource={visibleRows}
+            rowKey="id"
+            size="small"
+            scroll={{ x: 'max-content' }}
+            pagination={false}
+            bordered
+          />
+        </div>
+      ),
+    }] : []),
+    {
+      key: 'my',
+      label: <span><UserOutlined /> My Entry</span>,
+      children: (
+        <MyEntryTab
+          userId={userId}
+          userName={userName}
+          allRows={allRows}
+          setAllRows={setAllRows}
+        />
+      ),
+    },
+  ];
 
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: '#1f1f1f' }}>
+            <FileExcelOutlined style={{ color: '#C8102E', marginRight: 8 }} />
+            Time Sheet
+          </div>
+          <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
+            Weekly attendance &amp; hours tracker
+          </div>
+        </div>
+        {/* Week navigation (admin view) */}
+        {userRole !== 'Agent' && tab === 'all' && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Button size="small" icon={<span>‹</span>} onClick={() => setWeekStart(w => w.subtract(1, 'week'))} />
+            <span style={{ fontSize: 13, fontWeight: 600, color: isCurrentWeek ? '#C8102E' : '#555' }}>
+              <CalendarOutlined style={{ marginRight: 4 }} />{weekLabel}
+            </span>
+            <Button size="small" icon={<span>›</span>} onClick={() => setWeekStart(w => w.add(1, 'week'))} disabled={isCurrentWeek} />
+            {!isCurrentWeek && (
+              <Button size="small" onClick={() => setWeekStart(currentWkStart)} style={{ color: '#C8102E', borderColor: '#C8102E' }}>
+                Current Week
+              </Button>
+            )}
+          </div>
+        )}
+      </div>
+
+      <Card style={{ borderRadius: 10 }} styles={{ body: { padding: '0 16px 16px' } }}>
+        <Tabs
+          activeKey={tab}
+          onChange={setTab}
+          items={tabItems}
+        />
+      </Card>
+
+      <AddStaffModal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        onAdd={r => { setAllRows(p => [...p, r]); message.success('Staff added!'); }}
+      />
+    </div>
+  );
+}

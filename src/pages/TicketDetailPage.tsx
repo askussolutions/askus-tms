@@ -1,28 +1,65 @@
 import React, { useState } from 'react';
-import { Card, Tabs, Button, Select, Descriptions, Tag, Upload, Input, message, Spin } from 'antd';
-import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
+import {
+  Card, Tabs, Button, Select, Descriptions, Tag, Upload,
+  Input, InputNumber, DatePicker, Form, message, Spin,
+} from 'antd';
+import { UploadOutlined, DeleteOutlined, EditOutlined, EyeOutlined, SaveOutlined, CloseOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
+import dayjs from 'dayjs';
 import { useTicket, useMutation } from '../hooks';
 import { api } from '../api/mockApi';
 import { WorkflowSteps, StatusBadge, PriorityTag, InsuranceStatusTag, PaymentStatusTag, DocStatus, AvatarInitials } from '../components/shared';
-import type { TicketStatus } from '../types';
+import type { Ticket, TicketStatus } from '../types';
+import type { Dayjs } from 'dayjs';
 
 const STATUS_OPTS = [
-  { value:'Open', label:'Open' },
+  { value:'Open',       label:'Open' },
   { value:'InProgress', label:'In progress' },
-  { value:'Completed', label:'Completed' },
-  { value:'Closed', label:'Closed' },
+  { value:'Completed',  label:'Completed' },
+  { value:'Closed',     label:'Closed' },
 ];
+
+/* ── tiny reusable view row ──────────────────────────────────────────── */
+function VRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display:'flex', padding:'7px 0', borderBottom:'1px solid #f0f0f0', gap:8 }}>
+      <span style={{ fontSize:12, color:'#888', minWidth:140, flexShrink:0 }}>{label}</span>
+      <span style={{ fontSize:12, fontWeight:500, color:'#222', flex:1 }}>{value ?? '—'}</span>
+    </div>
+  );
+}
+
+/* ── section header used in edit mode ───────────────────────────────── */
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize:12, fontWeight:700, color:'#1565C0', letterSpacing:0.3,
+      borderBottom:'1px solid #e8f0fe', paddingBottom:8, marginBottom:14, marginTop:4 }}>
+      {children}
+    </div>
+  );
+}
 
 export default function TicketDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { ticket, loading, refetch } = useTicket(id!);
-  const [comment, setComment] = useState('');
-  const [newStatus, setNewStatus] = useState('');
   const navigate = useNavigate();
-  const { mutate: updateStatus, loading: saving } = useMutation(api.updateTicketStatus);
+
+  /* mode */
+  const [editMode, setEditMode] = useState(false);
+  const [editForm] = Form.useForm();
+
+  /* status-only quick update */
+  const [newStatus, setNewStatus] = useState('');
+  const { mutate: updateStatus, loading: statusSaving } = useMutation(api.updateTicketStatus);
+
+  /* full ticket save */
+  const { mutate: saveTicket, loading: saving } = useMutation(api.updateTicket);
+
+  /* comment */
+  const [comment, setComment] = useState('');
   const { mutate: addCommentFn, loading: commenting } = useMutation(api.addComment);
 
+  /* ── guards ─────────────────────────────────────────────────────── */
   if (loading) return <Spin size="large" style={{ display:'block', margin:'80px auto' }} />;
   if (!ticket) return <div style={{ padding:40, color:'#888' }}>Ticket not found</div>;
 
@@ -30,9 +67,86 @@ export default function TicketDetailPage() {
   const hasRC  = ticket.documents.some(d => d.type === 'RC');
   const hasIns = ticket.documents.some(d => d.type === 'Insurance');
 
+  /* ── enter edit mode: pre-fill form ────────────────────────────── */
+  const enterEdit = () => {
+    const [makePart, ...modelParts] = (ticket.vehicleName ?? '').split(' ');
+    editForm.setFieldsValue({
+      vehicleRegNo:    ticket.vehicleRegNo,
+      make:            makePart ?? '',
+      model:           modelParts.join(' '),
+      year:            (ticket as any).year ?? '',
+      fuelType:        (ticket as any).fuelType ?? '',
+      colour:          (ticket as any).colour ?? '',
+      chassisNo:       (ticket as any).chassisNo ?? '',
+      engineNo:        (ticket as any).engineNo ?? '',
+      ownerName:       ticket.customerName,
+      mobile:          ticket.customerMobile,
+      address:         (ticket as any).address ?? '',
+      insurer:         ticket.policy.insurer,
+      policyType:      ticket.policy.policyType,
+      policyNumber:    ticket.policy.policyNumber,
+      idv:             ticket.policy.idv,
+      netPremium:      ticket.policy.netPremium,
+      ncb:             ticket.policy.ncbPercent,
+      startDate:       ticket.policy.startDate  ? dayjs(ticket.policy.startDate)  : undefined,
+      expiryDate:      ticket.policy.expiryDate ? dayjs(ticket.policy.expiryDate) : undefined,
+      renewalDate:     ticket.policy.renewalDate ? dayjs(ticket.policy.renewalDate) : undefined,
+      insuranceStatus: ticket.policy.insuranceStatus,
+      paymentStatus:   ticket.payment.paymentStatus,
+      priority:        ticket.priority,
+      status:          ticket.status,
+      assignedTo:      ticket.assignedToName ?? '',
+      dueDate:         ticket.dueDate ? dayjs(ticket.dueDate) : undefined,
+      notes:           ticket.internalNotes ?? '',
+    });
+    setEditMode(true);
+  };
+
+  /* ── save edited ticket ─────────────────────────────────────────── */
+  const handleSave = async (vals: Record<string, unknown>) => {
+    const startDate  = (vals.startDate  as Dayjs)?.format('YYYY-MM-DD') ?? ticket.policy.startDate;
+    const expiryDate = (vals.expiryDate as Dayjs)?.format('YYYY-MM-DD') ?? ticket.policy.expiryDate;
+    const net = (vals.netPremium as number) ?? ticket.policy.netPremium;
+
+    const payload: Partial<Ticket> = {
+      title:          `${vals.vehicleRegNo ?? ticket.vehicleRegNo} — ${vals.insurer ?? ticket.policy.insurer}`,
+      priority:       vals.priority as Ticket['priority'],
+      status:         vals.status   as Ticket['status'],
+      vehicleRegNo:   vals.vehicleRegNo as string,
+      vehicleName:    `${vals.make ?? ''} ${vals.model ?? ''}`.trim(),
+      customerName:   vals.ownerName as string,
+      customerMobile: vals.mobile    as string,
+      internalNotes:  vals.notes     as string,
+      policy: {
+        ...ticket.policy,
+        insurer:         vals.insurer as string,
+        policyType:      vals.policyType as Ticket['policy']['policyType'],
+        policyNumber:    vals.policyNumber as string,
+        idv:             vals.idv as number,
+        netPremium:      net,
+        gst:             Math.round(net * 0.18),
+        totalPremium:    Math.round(net * 1.18),
+        ncbPercent:      vals.ncb as number ?? 0,
+        startDate, expiryDate,
+        renewalDate:     (vals.renewalDate as Dayjs)?.format('YYYY-MM-DD'),
+        insuranceStatus: vals.insuranceStatus as Ticket['policy']['insuranceStatus'],
+      },
+      payment: {
+        ...ticket.payment,
+        paymentStatus: vals.paymentStatus as Ticket['payment']['paymentStatus'],
+      },
+    };
+
+    const updated = await saveTicket(ticket.id, payload);
+    if (updated) {
+      message.success('Ticket updated successfully!');
+      setEditMode(false);
+      refetch();
+    }
+  };
+
   const handleStatusSave = async () => {
-    const target = newStatus || ticket.status;
-    await updateStatus(ticket.id, target);
+    await updateStatus(ticket.id, newStatus || ticket.status);
     message.success('Status updated');
     refetch();
   };
@@ -57,62 +171,77 @@ export default function TicketDetailPage() {
     refetch();
   };
 
-  const tabs = [
+  /* ── shared form field style ────────────────────────────────────── */
+  const fw = { width: '100%' };
+  const fl: React.CSSProperties = { fontSize: 11, color: '#666' };
+  const grid2: React.CSSProperties = { display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' };
+
+  /* ── VIEW-mode tab content ──────────────────────────────────────── */
+  const viewTabs = [
     {
       key: 'vehicle', label: 'Vehicle',
       children: (
-        <Descriptions column={2} size="small" bordered
-          labelStyle={{ fontSize:12, color:'#888', width:130 }} contentStyle={{ fontSize:12 }}>
-          <Descriptions.Item label="Registration no."><strong>{ticket.vehicleRegNo}</strong></Descriptions.Item>
-          <Descriptions.Item label="Vehicle">{ticket.vehicleName}</Descriptions.Item>
-          <Descriptions.Item label="Owner name">{ticket.customerName}</Descriptions.Item>
-          <Descriptions.Item label="Mobile">{ticket.customerMobile}</Descriptions.Item>
-        </Descriptions>
+        <div>
+          <SectionTitle>🚗 Vehicle Details</SectionTitle>
+          <VRow label="Registration No." value={<strong>{ticket.vehicleRegNo}</strong>} />
+          <VRow label="Vehicle" value={ticket.vehicleName} />
+          <VRow label="Year" value={(ticket as any).year} />
+          <VRow label="Fuel Type" value={(ticket as any).fuelType} />
+          <VRow label="Colour" value={(ticket as any).colour} />
+          <VRow label="Chassis No." value={(ticket as any).chassisNo} />
+          <VRow label="Engine No." value={(ticket as any).engineNo} />
+          <div style={{ marginTop:14 }}>
+            <SectionTitle>👤 Owner Details</SectionTitle>
+          </div>
+          <VRow label="Owner Name" value={ticket.customerName} />
+          <VRow label="Mobile" value={ticket.customerMobile} />
+          <VRow label="Address" value={(ticket as any).address} />
+        </div>
       ),
     },
     {
       key: 'insurance', label: 'Insurance',
       children: (
-        <Descriptions column={2} size="small" bordered
-          labelStyle={{ fontSize:12, color:'#888', width:130 }} contentStyle={{ fontSize:12 }}>
-          <Descriptions.Item label="Insurer"><strong>{ticket.policy.insurer}</strong></Descriptions.Item>
-          <Descriptions.Item label="Policy type">{ticket.policy.policyType}</Descriptions.Item>
-          <Descriptions.Item label="Policy no.">{ticket.policy.policyNumber ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="IDV">₹{ticket.policy.idv?.toLocaleString('en-IN') ?? '—'}</Descriptions.Item>
-          <Descriptions.Item label="Net premium">₹{ticket.policy.netPremium.toLocaleString('en-IN')}</Descriptions.Item>
-          <Descriptions.Item label="Total (incl. GST)"><strong>₹{ticket.policy.totalPremium.toLocaleString('en-IN')}</strong></Descriptions.Item>
-          <Descriptions.Item label="Start date">{new Date(ticket.policy.startDate).toLocaleDateString('en-IN')}</Descriptions.Item>
-          <Descriptions.Item label="Expiry date">
+        <div>
+          <SectionTitle>🛡️ Insurance Details</SectionTitle>
+          <VRow label="Insurer" value={<strong>{ticket.policy.insurer}</strong>} />
+          <VRow label="Policy Type" value={ticket.policy.policyType} />
+          <VRow label="Policy No." value={ticket.policy.policyNumber} />
+          <VRow label="IDV" value={ticket.policy.idv ? `₹${ticket.policy.idv.toLocaleString('en-IN')}` : undefined} />
+          <VRow label="Net Premium" value={`₹${ticket.policy.netPremium.toLocaleString('en-IN')}`} />
+          <VRow label="GST (18%)" value={`₹${ticket.policy.gst.toLocaleString('en-IN')}`} />
+          <VRow label="Total Premium" value={<strong>₹{ticket.policy.totalPremium.toLocaleString('en-IN')}</strong>} />
+          <VRow label="NCB %" value={`${ticket.policy.ncbPercent}%`} />
+          <VRow label="Start Date" value={new Date(ticket.policy.startDate).toLocaleDateString('en-IN')} />
+          <VRow label="Expiry Date" value={
             <span style={{ color: expiryDays <= 0 ? '#cf1322' : expiryDays <= 30 ? '#d46b08' : undefined, fontWeight: expiryDays <= 30 ? 600 : 400 }}>
               {new Date(ticket.policy.expiryDate).toLocaleDateString('en-IN')}
               {expiryDays <= 0 ? ' (Expired)' : expiryDays <= 30 ? ` · ${expiryDays}d left` : ''}
             </span>
-          </Descriptions.Item>
-          <Descriptions.Item label="NCB">{ticket.policy.ncbPercent}%</Descriptions.Item>
-          <Descriptions.Item label="Status"><InsuranceStatusTag status={ticket.policy.insuranceStatus} /></Descriptions.Item>
-          <Descriptions.Item label="Renewal date">{ticket.policy.renewalDate ?? '—'}</Descriptions.Item>
-        </Descriptions>
+          } />
+          <VRow label="Renewal Date" value={ticket.policy.renewalDate ? new Date(ticket.policy.renewalDate).toLocaleDateString('en-IN') : undefined} />
+          <VRow label="Insurance Status" value={<InsuranceStatusTag status={ticket.policy.insuranceStatus} />} />
+        </div>
       ),
     },
     {
       key: 'payment', label: 'Payment',
       children: (
         <div>
-          <Descriptions column={2} size="small" bordered style={{ marginBottom:16 }}
-            labelStyle={{ fontSize:12, color:'#888', width:130 }} contentStyle={{ fontSize:12 }}>
-            <Descriptions.Item label="Amount">₹{ticket.payment.amount.toLocaleString('en-IN')}</Descriptions.Item>
-            <Descriptions.Item label="Status"><PaymentStatusTag status={ticket.payment.paymentStatus} /></Descriptions.Item>
-            <Descriptions.Item label="Mode">{ticket.payment.paymentMode ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="Transaction ID">{ticket.payment.transactionId ?? '—'}</Descriptions.Item>
-            <Descriptions.Item label="Paid on">{ticket.payment.paidAt ? new Date(ticket.payment.paidAt).toLocaleDateString('en-IN') : '—'}</Descriptions.Item>
-          </Descriptions>
+          <SectionTitle>💳 Payment Details</SectionTitle>
+          <VRow label="Amount" value={`₹${ticket.payment.amount.toLocaleString('en-IN')}`} />
+          <VRow label="Status" value={<PaymentStatusTag status={ticket.payment.paymentStatus} />} />
+          <VRow label="Mode" value={ticket.payment.paymentMode} />
+          <VRow label="Transaction ID" value={ticket.payment.transactionId} />
+          <VRow label="Paid On" value={ticket.payment.paidAt ? new Date(ticket.payment.paidAt).toLocaleDateString('en-IN') : undefined} />
+
           {ticket.payment.paymentStatus === 'Pending' && (
-            <div style={{ background:'#fafafa', border:'1px solid #f0f0f0', borderRadius:8, padding:14 }}>
+            <div style={{ marginTop:16, background:'#fafafa', border:'1px solid #f0f0f0', borderRadius:8, padding:14 }}>
               <div style={{ fontWeight:500, fontSize:13, marginBottom:12 }}>Record payment</div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:10 }}>
+              <div style={{ ...grid2, marginBottom:10 }}>
                 <div>
                   <div style={{ fontSize:12, color:'#888', marginBottom:4 }}>Payment mode</div>
-                  <Select style={{ width:'100%' }} defaultValue="UPI">
+                  <Select style={fw} defaultValue="UPI">
                     {['UPI','NEFT','Cash','Cheque','Card'].map(m => <Select.Option key={m} value={m}>{m}</Select.Option>)}
                   </Select>
                 </div>
@@ -133,6 +262,7 @@ export default function TicketDetailPage() {
       key: 'documents', label: 'Documents',
       children: (
         <div>
+          <SectionTitle>📎 Documents</SectionTitle>
           {ticket.documents.length === 0 && (
             <div style={{ background:'#fff7e6', border:'1px solid #ffd591', borderRadius:8, padding:'10px 14px', fontSize:12, color:'#d46b08', marginBottom:14 }}>
               No documents attached. RC copy and insurance copy recommended.
@@ -152,9 +282,9 @@ export default function TicketDetailPage() {
             {(['RC','Insurance'] as const).filter(type => !ticket.documents.some(d => d.type === type)).map(type => (
               <Upload key={type} beforeUpload={file => { handleUpload(file, type); return false; }}
                 showUploadList={false} accept=".pdf,.jpg,.jpeg,.png">
-                <div style={{ border:'1px dashed #d9d9d9', borderRadius:8, padding:'18px 16px', textAlign:'center', cursor:'pointer', background:'#fafafa' }}>
-                  <UploadOutlined style={{ fontSize:20, color:'#888', marginBottom:6 }} />
-                  <div style={{ fontSize:12, color:'#666' }}>Upload {type} copy</div>
+                <div style={{ border:'1.5px dashed #c5d8f5', borderRadius:10, padding:'18px 16px', textAlign:'center', cursor:'pointer', background:'#f4f8ff' }}>
+                  <UploadOutlined style={{ fontSize:20, color:'#1565C0', marginBottom:6 }} />
+                  <div style={{ fontSize:12, color:'#1565C0' }}>Upload {type} copy</div>
                   <div style={{ fontSize:11, color:'#bbb' }}>PDF · JPG · PNG · max 10 MB</div>
                 </div>
               </Upload>
@@ -189,34 +319,198 @@ export default function TicketDetailPage() {
     },
   ];
 
+  /* ── EDIT-mode inline form ──────────────────────────────────────── */
+  const editContent = (
+    <Form form={editForm} layout="vertical" onFinish={handleSave}>
+      {/* Vehicle */}
+      <SectionTitle>🚗 Vehicle Details</SectionTitle>
+      <div style={grid2}>
+        <Form.Item name="vehicleRegNo" label={<span style={fl}>Registration No. *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="make" label={<span style={fl}>Make</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="model" label={<span style={fl}>Model</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="year" label={<span style={fl}>Year</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="fuelType" label={<span style={fl}>Fuel Type</span>} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['Petrol','Diesel','Electric','CNG','Hybrid'].map(f => <Select.Option key={f} value={f}>{f}</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="colour" label={<span style={fl}>Colour</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="chassisNo" label={<span style={fl}>Chassis No.</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="engineNo" label={<span style={fl}>Engine No.</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+      </div>
+
+      {/* Owner */}
+      <SectionTitle>👤 Owner Details</SectionTitle>
+      <div style={grid2}>
+        <Form.Item name="ownerName" label={<span style={fl}>Owner Name *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="mobile" label={<span style={fl}>Mobile *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="address" label={<span style={fl}>Address</span>} style={{ marginBottom:12, gridColumn:'1/-1' }}>
+          <Input style={fw} />
+        </Form.Item>
+      </div>
+
+      {/* Insurance */}
+      <SectionTitle>🛡️ Insurance Details</SectionTitle>
+      <div style={grid2}>
+        <Form.Item name="insurer" label={<span style={fl}>Insurer *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['HDFC Ergo','Bajaj Allianz','ICICI Lombard','New India Assurance','Oriental Insurance','United India','Reliance General','Tata AIG'].map(i => <Select.Option key={i} value={i}>{i}</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="policyType" label={<span style={fl}>Policy Type *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['Comprehensive','ThirdParty','OwnDamage','ZeroDep'].map(t => <Select.Option key={t} value={t}>{t}</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="policyNumber" label={<span style={fl}>Policy Number</span>} style={{ marginBottom:12 }}>
+          <Input style={fw} />
+        </Form.Item>
+        <Form.Item name="idv" label={<span style={fl}>IDV (₹)</span>} style={{ marginBottom:12 }}>
+          <InputNumber style={fw} formatter={v => `₹ ${v}`.replace(/\B(?=(\d{3})+(?!\d))/g,',')} />
+        </Form.Item>
+        <Form.Item name="netPremium" label={<span style={fl}>Net Premium (₹) *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <InputNumber style={fw} formatter={v => `₹ ${v}`} />
+        </Form.Item>
+        <Form.Item name="ncb" label={<span style={fl}>NCB %</span>} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {[0,20,25,35,45,50].map(n => <Select.Option key={n} value={n}>{n}%</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="startDate" label={<span style={fl}>Start Date *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <DatePicker style={fw} format="DD/MM/YYYY" />
+        </Form.Item>
+        <Form.Item name="expiryDate" label={<span style={fl}>Expiry Date *</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <DatePicker style={fw} format="DD/MM/YYYY" />
+        </Form.Item>
+        <Form.Item name="renewalDate" label={<span style={fl}>Renewal Date</span>} style={{ marginBottom:12 }}>
+          <DatePicker style={fw} format="DD/MM/YYYY" />
+        </Form.Item>
+        <Form.Item name="insuranceStatus" label={<span style={fl}>Insurance Status</span>} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['Active','ExpiringSoon','Expired','NewPolicy'].map(s => <Select.Option key={s} value={s}>{s}</Select.Option>)}
+          </Select>
+        </Form.Item>
+      </div>
+
+      {/* Payment */}
+      <SectionTitle>💳 Payment</SectionTitle>
+      <div style={grid2}>
+        <Form.Item name="paymentStatus" label={<span style={fl}>Payment Status</span>} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['Pending','Paid','Partial'].map(s => <Select.Option key={s} value={s}>{s}</Select.Option>)}
+          </Select>
+        </Form.Item>
+      </div>
+
+      {/* Ticket settings */}
+      <SectionTitle>⚙️ Ticket Settings</SectionTitle>
+      <div style={grid2}>
+        <Form.Item name="priority" label={<span style={fl}>Priority</span>} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['High','Medium','Low'].map(p => <Select.Option key={p} value={p}>{p}</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="status" label={<span style={fl}>Status</span>} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {STATUS_OPTS.map(o => <Select.Option key={o.value} value={o.value}>{o.label}</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="assignedTo" label={<span style={fl}>Assigned To</span>} style={{ marginBottom:12 }}>
+          <Select style={fw} placeholder="Select agent">
+            {['Rajesh Kumar','Karthik S','Priya V','Anand Raj'].map(a => <Select.Option key={a} value={a}>{a}</Select.Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="dueDate" label={<span style={fl}>Due Date</span>} style={{ marginBottom:12 }}>
+          <DatePicker style={fw} format="DD/MM/YYYY" />
+        </Form.Item>
+      </div>
+
+      {/* Notes */}
+      <SectionTitle>📝 Internal Notes</SectionTitle>
+      <Form.Item name="notes" style={{ marginBottom:12 }}>
+        <Input.TextArea rows={3} style={{ resize:'none', width:'100%' }} placeholder="Notes for the team…" />
+      </Form.Item>
+    </Form>
+  );
+
+  /* ═══════════════════════════════════════════════════════════════════ */
   return (
     <div>
+      {/* ── Header ──────────────────────────────────────────────────── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
           <Button onClick={() => navigate('/tickets')}>← Back</Button>
           <div>
             <h2 style={{ margin:0, fontSize:18 }}>{ticket.ticketNumber} · {ticket.title}</h2>
-            <p style={{ margin:0, color:'#888', fontSize:12 }}>Created {new Date(ticket.createdAt).toLocaleDateString('en-IN')}</p>
+            <p style={{ margin:0, color:'#888', fontSize:12 }}>
+              Created {new Date(ticket.createdAt).toLocaleDateString('en-IN')}
+              {editMode && <span style={{ marginLeft:10, color:'#1565C0', fontWeight:600 }}>✏️ Edit Mode</span>}
+            </p>
           </div>
         </div>
+
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-          <Select defaultValue={ticket.status} style={{ width:140 }} onChange={v => setNewStatus(v)}>
-            {STATUS_OPTS.map(o => <Select.Option key={o.value} value={o.value}>{o.label}</Select.Option>)}
-          </Select>
-          <Button type="primary" loading={saving} onClick={handleStatusSave}
-            style={{ background:'#C8102E', borderColor:'#C8102E' }}>Save status</Button>
+          {editMode ? (
+            <>
+              <Button icon={<CloseOutlined />} onClick={() => setEditMode(false)}>Cancel</Button>
+              <Button type="primary" icon={<SaveOutlined />} loading={saving}
+                onClick={() => editForm.submit()}
+                style={{ background:'#1565C0', borderColor:'#1565C0' }}>
+                Save Changes
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button icon={<EyeOutlined />} disabled style={{ color:'#1565C0', borderColor:'#1565C0' }}>View</Button>
+              <Button icon={<EditOutlined />} onClick={enterEdit}
+                style={{ background:'#1565C0', borderColor:'#1565C0', color:'#fff' }}>
+                Edit
+              </Button>
+              <Select defaultValue={ticket.status} style={{ width:140 }} onChange={v => setNewStatus(v)}>
+                {STATUS_OPTS.map(o => <Select.Option key={o.value} value={o.value}>{o.label}</Select.Option>)}
+              </Select>
+              <Button type="primary" loading={statusSaving} onClick={handleStatusSave}
+                style={{ background:'#C8102E', borderColor:'#C8102E' }}>Save status</Button>
+            </>
+          )}
         </div>
       </div>
 
+      {/* ── Workflow ─────────────────────────────────────────────────── */}
       <Card style={{ marginBottom:14, borderRadius:10 }} styles={{ body:{ padding:'14px 20px' } }}>
         <WorkflowSteps current={ticket.status as TicketStatus} />
       </Card>
 
+      {/* ── Main 2-column layout ────────────────────────────────────── */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 260px', gap:14 }}>
+
+        {/* LEFT — view tabs OR edit form */}
         <Card style={{ borderRadius:10 }}>
-          <Tabs items={tabs} />
+          {editMode
+            ? editContent
+            : <Tabs items={viewTabs} />
+          }
         </Card>
 
+        {/* RIGHT — sidebar (always visible) */}
         <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
           <Card size="small" title="Ticket info" style={{ borderRadius:10 }}>
             {[

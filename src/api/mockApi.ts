@@ -1,4 +1,8 @@
 import type { Ticket, DashboardKPIs, PaginatedResponse, User, OTPResponse, AuthResponse } from '../types';
+import { apiClient } from './api';
+
+// ── Feature flag: use real backend when VITE_API_BASE_URL is set ──────────────
+const USE_REAL_API = Boolean(import.meta.env.VITE_API_BASE_URL);
 
 const delay = (ms = 400) => new Promise(r => setTimeout(r, ms));
 
@@ -140,7 +144,8 @@ const CREDENTIALS: Record<string, { password: string; userKey: keyof typeof MOCK
   'agent@askus.com':    { password: 'agent123',  userKey: 'agent' },
 };
 
-export const api = {
+// ── Mock implementations ──────────────────────────────────────────────────────
+const mockImpl = {
   sendOTP: async (_mobile: string): Promise<OTPResponse> => {
     await delay(600);
     return { success: true, sessionId: 'mock-session-' + Date.now(), message: 'OTP sent' };
@@ -148,7 +153,6 @@ export const api = {
 
   verifyOTP: async (emailOrMobile: string, otpOrPassword: string, _sessionId: string): Promise<AuthResponse> => {
     await delay(800);
-    // Account login path
     const cred = CREDENTIALS[emailOrMobile.toLowerCase()];
     if (cred) {
       if (otpOrPassword !== cred.password) throw new Error('Invalid credentials');
@@ -158,7 +162,6 @@ export const api = {
         user: MOCK_USERS[cred.userKey],
       };
     }
-    // OTP path — defaults to Admin for demo
     return {
       token: 'mock-jwt-' + Date.now(),
       expiresAt: new Date(Date.now() + 12 * 3600 * 1000).toISOString(),
@@ -196,9 +199,9 @@ export const api = {
         t.vehicleName.toLowerCase().includes(q)
       );
     }
-    if (params.status) result = result.filter(t => t.status === params.status);
+    if (params.status)   result = result.filter(t => t.status === params.status);
     if (params.priority) result = result.filter(t => t.priority === params.priority);
-    if (params.insurer) result = result.filter(t => t.policy.insurer === params.insurer);
+    if (params.insurer)  result = result.filter(t => t.policy.insurer === params.insurer);
     if (params.assignedToId) result = result.filter(t => t.assignedToId === params.assignedToId);
     const page = params.page ?? 1;
     const pageSize = params.pageSize ?? 20;
@@ -239,6 +242,15 @@ export const api = {
     }
   },
 
+  updateTicket: async (id: string, data: Partial<Ticket>): Promise<Ticket> => {
+    await delay(500);
+    const idx = tickets.findIndex(t => t.id === id);
+    if (idx === -1) throw new Error('Ticket not found');
+    tickets[idx] = { ...tickets[idx], ...data, updatedAt: new Date().toISOString() };
+    tickets[idx].activityLog.push({ id: 'log-' + Date.now(), action: 'ticket updated', performedByName: 'You', createdAt: new Date().toISOString() });
+    return tickets[idx];
+  },
+
   updatePayment: async (id: string, paymentData: Partial<Ticket['payment']>): Promise<void> => {
     await delay(400);
     const t = tickets.find(t => t.id === id);
@@ -271,3 +283,32 @@ export const api = {
 
   sendReminder: async (_ticketId: string): Promise<void> => { await delay(500); },
 };
+
+// ── Exported api — real backend when available, mock otherwise ────────────────
+export const api: typeof mockImpl & {
+  verifyOTP(email: string, password: string, sessionId: string): Promise<AuthResponse>;
+} = USE_REAL_API
+  ? {
+      // Auth
+      sendOTP: mockImpl.sendOTP,
+      verifyOTP: (email: string, password: string, _sessionId: string) =>
+        apiClient.login(email, password),
+
+      // Dashboard
+      getKPIs:         () => apiClient.getKPIs(),
+      getExpiryAlerts: (days = 30) => apiClient.getExpiryAlerts(days),
+      getMonthlyData:  () => apiClient.getMonthlyData(),
+
+      // Tickets
+      getTickets:          (params) => apiClient.getTickets(params),
+      getTicketById:       (id) => apiClient.getTicketById(id),
+      createTicket:        (data) => apiClient.createTicket(data),
+      updateTicket:        (id, data) => apiClient.updateTicket(id, data),
+      updateTicketStatus:  (id, status, note) => apiClient.updateTicketStatus(id, status, note),
+      updatePayment:       (id, data) => apiClient.updatePayment(id, data),
+      addComment:          (id, note) => apiClient.addComment(id, note),
+      uploadDocument:      (id, file, type) => apiClient.uploadDocument(id, file, type),
+      deleteDocument:      (ticketId, docId) => apiClient.deleteDocument(ticketId, docId),
+      sendReminder:        (id) => apiClient.sendReminder(id),
+    }
+  : mockImpl;

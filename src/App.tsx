@@ -90,6 +90,11 @@ export default function App() {
                   <TicketFormPage />
                 </RoleRoute>
               } />
+              <Route path="tickets/:id/edit" element={
+                <RoleRoute allowed={['Admin', 'Employee']}>
+                  <TicketFormPage />
+                </RoleRoute>
+              } />
               <Route path="tickets/:id" element={
                 <RoleRoute allowed={['Admin', 'Employee']}>
                   <TicketDetailPage />

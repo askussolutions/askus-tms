@@ -64,51 +64,24 @@ export default function LoginPage() {
     }
   };
 
-  // USERS object-ல் role capitalize பண்ணுங்க:
-const USERS: Record<string, { password: string; name: string; role: string }> = {
-  rajesh:    { password: 'Rajesh@2026',  name: 'Rajesh Kumar', role: 'Admin'    },
-  haripriya: { password: 'Rajesh@2026e', name: 'Haripriya',    role: 'Employee' },
-  agent:     { password: 'Rajesh@2026a', name: 'Agent',        role: 'Agent'    },
-};
-
-const handleAccountLogin = async () => {
-  if (!email || !password) {
-    message.error('Enter username and password');
-    return;
-  }
-
-  const usernameLower = email.trim().toLowerCase();
-  const matched = USERS[usernameLower];
-
-  if (!matched) {
-    message.error('Invalid username');
-    return;
-  }
-
-  if (matched.password !== password) {
-    message.error('Invalid password');
-    return;
-  }
-
-  setLoading(true);
-  try {
-    const res = await api.verifyOTP(email, password, '');
-    dispatch(loginSuccess({ token: res.token, user: { ...res.user, name: matched.name, role: matched.role } }));
-    message.success(`Welcome, ${matched.name}!`);
-    navigate('/dashboard', { replace: true });
-  } catch {
-  dispatch(loginSuccess({ 
-    token: 'local-token', 
-    user: { 
-      name: matched.name, 
-      role: matched.role,  // இப்போ 'Admin' / 'Employee' / 'Agent' properly வரும்
-      email 
-    } 
-  }));
-  message.success(`Welcome, ${matched.name}!`);
-  navigate('/dashboard', { replace: true });
-}
-};
+  const handleAccountLogin = async () => {
+    if (!email || !password) {
+      message.error('Enter email and password');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.verifyOTP(email.trim(), password, '');
+      dispatch(loginSuccess({ token: res.token, user: res.user }));
+      message.success(`Welcome, ${res.user.name}!`);
+      navigate(res.user.role === 'Agent' ? '/timesheet' : '/dashboard', { replace: true });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Invalid credentials';
+      message.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div style={s.page}>
