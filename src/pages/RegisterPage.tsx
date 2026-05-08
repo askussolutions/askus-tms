@@ -2,9 +2,9 @@ import insuranceBg from '../assets/insurance-bg.png';
 import React, { useState } from 'react';
 import { message, Spin } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { apiClient } from '../api/api';
 import { useAppDispatch } from '../store';
 import { loginSuccess } from '../store';
+import type { UserRole } from '../types';
 
 // ── Password strength checker ─────────────────────────────────────────────────
 interface PasswordRule { label: string; test: (p: string) => boolean; }
@@ -93,11 +93,19 @@ export default function RegisterPage() {
 
     setLoading(true);
     try {
-      const res = await apiClient.register(fullName.trim(), email.trim(), mobile, password, role);
-      dispatch(loginSuccess({ token: res.token, user: res.user }));
-      message.success(`Welcome, ${res.user.name}! Account created successfully.`);
-      // Redirect based on role
-      navigate(res.user.role === 'Agent' ? '/timesheet' : '/dashboard', { replace: true });
+      await new Promise(r => setTimeout(r, 600));
+      const user = {
+        id:       'user-' + Date.now(),
+        name:     fullName.trim(),
+        email:    email.trim(),
+        mobile:   '+91' + mobile,
+        role:     role as UserRole,
+        branchId: 'branch-001',
+      };
+      const token = 'mock-jwt-' + Date.now();
+      dispatch(loginSuccess({ token, user }));
+      message.success(`Welcome, ${user.name}! Account created successfully.`);
+      navigate(user.role === 'Agent' ? '/timesheet' : '/dashboard', { replace: true });
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Registration failed';
       message.error(msg);
