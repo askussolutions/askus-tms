@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Card, Table, Button, Input, Select, DatePicker, Tag, message,
   Tabs, Row, Col, Popconfirm, Tooltip, Modal, Form, Avatar, Badge, Alert,
@@ -50,12 +50,9 @@ const ROLE_COLOR: Record<string, string> = {
 
 // ── Staff master ───────────────────────────────────────────────────────────────
 const INITIAL_STAFF: StaffRow[] = [
-  { id: 'user-001', employeeName: 'Rajesh Kumar',  employeeId: 'EMP001', role: 'Admin',    days: {} },
-  { id: 'user-002', employeeName: 'Priya Sharma',  employeeId: 'EMP002', role: 'Employee', days: {} },
-  { id: 'user-003', employeeName: 'Karthik M',     employeeId: 'EMP003', role: 'Employee', days: {} },
-  { id: 'user-004', employeeName: 'Anand Raj',     employeeId: 'AGT001', role: 'Agent',    days: {} },
-  { id: 'user-005', employeeName: 'Meena Devi',    employeeId: 'AGT002', role: 'Agent',    days: {} },
-  { id: 'user-006', employeeName: 'Suresh P',      employeeId: 'AGT003', role: 'Agent',    days: {} },
+  { id: 'user-001', employeeName: 'Rajesh Kumar', employeeId: 'EMP001', role: 'Admin',    days: {} },
+  { id: 'user-002', employeeName: 'Priya Sharma', employeeId: 'EMP002', role: 'Employee', days: {} },
+  { id: 'user-003', employeeName: 'Karthik M',    employeeId: 'AGT001', role: 'Agent',    days: {} },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -169,46 +166,96 @@ function DayCell({
 }
 
 // ── My Entry Card (single user — Mon to Sat, current week only) ───────────────
-function MyEntryTab({ userId, userName, allRows, setAllRows }: {
+function MyEntryTab({ userId, userName, allRows, setAllRows, isAdmin = false }: {
   userId: string; userName: string;
   allRows: StaffRow[]; setAllRows: React.Dispatch<React.SetStateAction<StaffRow[]>>;
+  isAdmin?: boolean;
 }) {
-  const dates  = useMemo(() => getWkDates(currentWkStart), []);
+  const [saved, setSaved] = useState(false);
+  const [myWeekStart, setMyWeekStart] = useState(currentWkStart);
+  const dates  = useMemo(() => getWkDates(myWeekStart), [myWeekStart]);
   const myRow  = allRows.find(r => r.id === userId);
-  const weekLabel = `${currentWkStart.format('DD MMM')} – ${currentWkStart.add(6, 'day').format('DD MMM YYYY')}`;
+  const weekLabel = `${myWeekStart.format('DD MMM')} – ${myWeekStart.add(6, 'day').format('DD MMM YYYY')}`;
+  const isCurrentWk = myWeekStart.isSame(currentWkStart, 'day');
+
+  const handleSave = () => {
+    localStorage.setItem('tms_timesheet_v3', JSON.stringify(allRows));
+    setSaved(true);
+    message.success('Timesheet saved successfully!');
+    setTimeout(() => setSaved(false), 3000);
+  };
 
   const updateDay = (dateKey: string, entry: DayEntry) =>
     setAllRows(prev => prev.map(r =>
       r.id === userId ? { ...r, days: { ...r.days, [dateKey]: entry } } : r
     ));
 
-  const totalHrs  = myRow ? calcHours(myRow, dates) : 0;
-  const workDays  = myRow ? calcDays(myRow, dates) : 0;
-  const presentCt = myRow ? dates.filter(d => myRow.days[fmtDate(d)]?.status === 'Present').length : 0;
-  const absentCt  = myRow ? dates.filter(d => myRow.days[fmtDate(d)]?.status === 'Absent').length : 0;
+  // If the row is missing (e.g. after a data clear), auto-restore it silently
+  useEffect(() => {
+    if (!myRow && userId) {
+      setAllRows(prev => prev.some(r => r.id === userId) ? prev : [
+        ...prev,
+        { id: userId, employeeName: userName || 'User', employeeId: 'EMP', role: 'Employee' as const, days: {} },
+      ]);
+    }
+  }, [myRow, userId, userName, setAllRows]);
 
-  if (!myRow) return (
-    <Alert type="warning" message="Your profile not found in staff list. Please contact admin." style={{ margin: 20 }} />
-  );
+  const row = myRow ?? { id: userId, employeeName: userName, employeeId: '', role: 'Employee' as const, days: {} };
+
+  const totalHrs  = calcHours(row, dates);
+  const workDays  = calcDays(row, dates);
+  const presentCt = dates.filter(d => row.days[fmtDate(d)]?.status === 'Present').length;
+  const absentCt  = dates.filter(d => row.days[fmtDate(d)]?.status === 'Absent').length;
 
   return (
     <div style={{ padding: 20, background: '#fff', border: '1px solid #e8e8e8', borderTop: 'none', borderRadius: '0 0 8px 8px' }}>
 
       {/* Week header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18, flexWrap: 'wrap', gap: 10 }}>
         <div>
           <div style={{ fontWeight: 700, fontSize: 16, color: '#1f1f1f' }}>
             My Attendance Entry
           </div>
           <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 2 }}>
-            <CalendarOutlined /> Current week: {weekLabel}
+            <CalendarOutlined /> Week: {weekLabel}
           </div>
         </div>
-        <Alert
-          type="info" showIcon
-          message="Only current week (Mon–Sat) is editable. Sunday is non-working."
-          style={{ fontSize: 11, padding: '4px 12px' }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          {isAdmin && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Button size="small" icon={<span>‹</span>} onClick={() => setMyWeekStart(w => w.subtract(1, 'week'))} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: isCurrentWk ? '#C8102E' : '#555' }}>
+                {weekLabel}
+              </span>
+              <Button size="small" icon={<span>›</span>} onClick={() => setMyWeekStart(w => w.add(1, 'week'))} disabled={isCurrentWk} />
+              {!isCurrentWk && (
+                <Button size="small" onClick={() => setMyWeekStart(currentWkStart)} style={{ color: '#C8102E', borderColor: '#C8102E' }}>
+                  Current
+                </Button>
+              )}
+            </div>
+          )}
+          {!isAdmin && (
+            <Alert
+              type="info" showIcon
+              message="Only current week (Mon–Sat) is editable. Sunday is non-working."
+              style={{ fontSize: 11, padding: '4px 12px' }}
+            />
+          )}
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSave}
+            style={{
+              background: saved ? '#52c41a' : '#C8102E',
+              borderColor: saved ? '#52c41a' : '#C8102E',
+              fontWeight: 600,
+              minWidth: 130,
+            }}
+          >
+            {saved ? 'Saved!' : 'Save Timesheet'}
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -234,7 +281,7 @@ function MyEntryTab({ userId, userName, allRows, setAllRows }: {
           const isSun    = i === 6;
           const dateKey  = fmtDate(d);
           const editable = isCellEditable(d, isSun);
-          const entry    = myRow.days[dateKey] ?? { status: 'Present' as Status, hours: 8 };
+          const entry    = row.days[dateKey] ?? { status: 'Present' as Status, hours: 0 };
           const isToday  = dateKey === todayKey;
           const isPastFut = !isSun && !editable;
 
@@ -406,7 +453,32 @@ export default function TimesheetPage() {
   const [weekStart, setWeekStart] = useState(getWkStart(dayjs()));
   const [filterRole, setFilterRole] = useState<string>('All');
   const [showAdd, setShowAdd]     = useState(false);
-  const [allRows, setAllRows]     = useState<StaffRow[]>(INITIAL_STAFF);
+  const [allRows, setAllRows]     = useState<StaffRow[]>(() => {
+    try {
+      const stored = localStorage.getItem('tms_timesheet_v3');
+      return stored ? JSON.parse(stored) : INITIAL_STAFF;
+    } catch { return INITIAL_STAFF; }
+  });
+
+  // Auto-save to localStorage whenever rows change
+  useEffect(() => {
+    localStorage.setItem('tms_timesheet_v3', JSON.stringify(allRows));
+  }, [allRows]);
+
+  // Guarantee the logged-in user always has a row — re-runs if user changes
+  useEffect(() => {
+    if (!userId) return;
+    setAllRows(prev => {
+      if (prev.some(r => r.id === userId)) return prev;
+      return [...prev, {
+        id: userId,
+        employeeName: userName || 'User',
+        employeeId: 'EMP',
+        role: userRole as 'Admin' | 'Employee' | 'Agent',
+        days: {},
+      }];
+    });
+  }, [userId, userName, userRole]);
 
   const dates     = useMemo(() => getWkDates(weekStart), [weekStart]);
   const weekLabel = `${weekStart.format('DD MMM')} – ${weekStart.add(6, 'day').format('DD MMM YYYY')}`;
@@ -492,7 +564,7 @@ export default function TimesheetPage() {
         key: fmtDate(d), width: 95,
         render: (_: any, r: StaffRow) => {
           const dateKey = fmtDate(d);
-          const entry   = r.days[dateKey] ?? { status: 'Present' as Status, hours: 8 };
+          const entry   = r.days[dateKey] ?? { status: 'Present' as Status, hours: 0 };
           return (
             <DayCell
               entry={entry}
@@ -516,14 +588,6 @@ export default function TimesheetPage() {
           </div>
         );
       },
-    },
-    {
-      title: '', key: 'del', width: 44, fixed: 'right' as const,
-      render: (_: any, r: StaffRow) => (
-        <Popconfirm title="Remove staff?" onConfirm={() => setAllRows(p => p.filter(x => x.id !== r.id))} okButtonProps={{ danger: true }}>
-          <Button size="small" danger type="text" icon={<DeleteOutlined />} />
-        </Popconfirm>
-      ),
     },
   ];
 
@@ -551,6 +615,23 @@ export default function TimesheetPage() {
               <Button size="small" icon={<DownloadOutlined />} onClick={() => exportXlsx(visibleRows, dates, weekLabel)}>
                 Export XLSX
               </Button>
+              <Popconfirm
+                title="Clear all timesheet data?"
+                description="This will reset all attendance entries for all staff."
+                onConfirm={() => {
+                  const reset = INITIAL_STAFF.map(r => ({ ...r, days: {} }));
+                  setAllRows(reset);
+                  localStorage.setItem('tms_timesheet_v3', JSON.stringify(reset));
+                  message.success('All timesheet data cleared');
+                }}
+                okButtonProps={{ danger: true }}
+                okText="Yes, Clear All"
+                cancelText="Cancel"
+              >
+                <Button size="small" danger icon={<DeleteOutlined />}>
+                  Clear All Data
+                </Button>
+              </Popconfirm>
             </div>
           </div>
           <div style={{ marginBottom: 10, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -580,6 +661,7 @@ export default function TimesheetPage() {
           userName={userName}
           allRows={allRows}
           setAllRows={setAllRows}
+          isAdmin={userRole === 'Admin'}
         />
       ),
     },

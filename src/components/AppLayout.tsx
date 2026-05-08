@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout, Badge, Dropdown, Button, message, Tag, Tooltip } from 'antd';
 import {
   DashboardOutlined, AppstoreOutlined, UnorderedListOutlined, BarChartOutlined, LogoutOutlined, BellOutlined, PlusOutlined, CalendarOutlined,
@@ -7,6 +7,7 @@ import {
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import { logout } from '../store';
+import { api } from '../api/mockApi';
 import type { UserRole } from '../types';
 
 const { Header, Sider, Content } = Layout;
@@ -24,14 +25,13 @@ interface NavItem {
   path: string;
   icon: React.ReactNode;
   label: string;
-  roles: UserRole[];        // which roles can see this
-  badge?: number;
+  roles: UserRole[];
   dividerBefore?: boolean;
 }
 
 const ALL_NAV: NavItem[] = [
   { path: '/dashboard', icon: <DashboardOutlined />,      label: 'Dashboard',    roles: ['Admin', 'Employee'] },
-  { path: '/board',     icon: <AppstoreOutlined />,       label: 'My Tickets',   roles: ['Admin', 'Employee'], badge: 59 },
+  { path: '/board',     icon: <AppstoreOutlined />,       label: 'My Tickets',   roles: ['Admin', 'Employee'] },
   { path: '/tickets',   icon: <UnorderedListOutlined />,  label: 'All Tickets',  roles: ['Admin', 'Employee'] },
   { path: '/analytics', icon: <BarChartOutlined />,       label: 'Analytics',    roles: ['Admin', 'Employee'] },
   { path: '/calendar',  icon: <CalendarOutlined />,       label: 'Calendar',     roles: ['Admin', 'Employee'], dividerBefore: true },
@@ -45,6 +45,12 @@ export default function AppLayout() {
   const user       = useAppSelector(s => s.auth.user);
   const role       = (user?.role ?? 'Agent') as UserRole;
   const initials   = (user?.name ?? 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase();
+
+  const [ticketCount, setTicketCount] = useState(0);
+
+  useEffect(() => {
+    api.getTickets({ pageSize: 1 }).then(r => setTicketCount(r.total)).catch(() => {});
+  }, [pathname]);
 
   const doLogout = () => {
     dispatch(logout());
@@ -152,7 +158,9 @@ export default function AppLayout() {
                   >
                     {nav.icon}
                     <span style={{ flex: 1 }}>{nav.label}</span>
-                    {nav.badge && <Badge count={nav.badge} style={{ background: '#C8102E', fontSize: 10 }} />}
+                    {nav.path === '/board' && ticketCount > 0 && (
+                      <Badge count={ticketCount} style={{ background: '#C8102E', fontSize: 10 }} />
+                    )}
                   </div>
                 </React.Fragment>
               );
