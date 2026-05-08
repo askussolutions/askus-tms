@@ -50,9 +50,7 @@ const ROLE_COLOR: Record<string, string> = {
 
 // ── Staff master ───────────────────────────────────────────────────────────────
 const INITIAL_STAFF: StaffRow[] = [
-  { id: 'user-001', employeeName: 'Rajesh Kumar', employeeId: 'EMP001', role: 'Admin',    days: {} },
-  { id: 'user-002', employeeName: 'Priya Sharma', employeeId: 'EMP002', role: 'Employee', days: {} },
-  { id: 'user-003', employeeName: 'Karthik M',    employeeId: 'AGT001', role: 'Agent',    days: {} },
+  { id: 'user-001', employeeName: 'Rajesh Kumar', employeeId: 'EMP001', role: 'Admin', days: {} },
 ];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
