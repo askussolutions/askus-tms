@@ -96,6 +96,7 @@ export default function TicketDetailPage() {
       priority:        ticket.priority,
       status:          ticket.status,
       assignedTo:      ticket.assignedToName ?? '',
+      ticketType:      ticket.ticketType ?? 'Insurance',
       dueDate:         ticket.dueDate ? dayjs(ticket.dueDate) : undefined,
       notes:           ticket.internalNotes ?? '',
     });
@@ -110,6 +111,7 @@ export default function TicketDetailPage() {
 
     const payload: Partial<Ticket> = {
       title:          `${vals.vehicleRegNo ?? ticket.vehicleRegNo} — ${vals.insurer ?? ticket.policy.insurer}`,
+      ticketType:     vals.ticketType as Ticket['ticketType'],
       priority:       vals.priority as Ticket['priority'],
       status:         vals.status   as Ticket['status'],
       vehicleRegNo:   vals.vehicleRegNo as string,
@@ -184,6 +186,7 @@ export default function TicketDetailPage() {
         <div>
           <SectionTitle>🚗 Vehicle Details</SectionTitle>
           <VRow label="Registration No." value={<strong>{ticket.vehicleRegNo}</strong>} />
+          <VRow label="Ticket Type" value={ticket.ticketType} />
           <VRow label="Vehicle" value={ticket.vehicleName} />
           <VRow label="Year" value={(ticket as any).year} />
           <VRow label="Fuel Type" value={(ticket as any).fuelType} />
@@ -423,6 +426,11 @@ export default function TicketDetailPage() {
       {/* Ticket settings */}
       <SectionTitle>⚙️ Ticket Settings</SectionTitle>
       <div style={grid2}>
+        <Form.Item name="ticketType" label={<span style={fl}>Ticket Type</span>} rules={[{ required:true }]} style={{ marginBottom:12 }}>
+          <Select style={fw}>
+            {['Insurance','Payment','Office','Other'].map(p => <Select.Option key={p} value={p}>{p}</Select.Option>)}
+          </Select>
+        </Form.Item>
         <Form.Item name="priority" label={<span style={fl}>Priority</span>} style={{ marginBottom:12 }}>
           <Select style={fw}>
             {['High','Medium','Low'].map(p => <Select.Option key={p} value={p}>{p}</Select.Option>)}

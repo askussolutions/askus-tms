@@ -1,8 +1,11 @@
 export type TicketStatus = 'Open' | 'InProgress' | 'Completed' | 'Closed';
 export type Priority = 'High' | 'Medium' | 'Low';
+export type TicketType = 'Insurance' | 'Payment' | 'Office' | 'Other';
 export type FuelType = 'Petrol' | 'Diesel' | 'Electric' | 'CNG' | 'Hybrid';
 export type PolicyType = 'Comprehensive' | 'ThirdParty' | 'OwnDamage' | 'ZeroDep';
 export type PaymentStatus = 'Pending' | 'Paid' | 'Partial' | 'Refunded';
+export type CommissionStatus = 'Pending' | 'Approved' | 'Paid';
+export type OwnerType = 'OWN' | 'CORPORATE';
 export type InsuranceStatus = 'Active' | 'ExpiringSoon' | 'Expired' | 'Cancelled' | 'NewPolicy';
 
 // ── Roles ─────────────────────────────────────────────────────────────────────
@@ -68,6 +71,56 @@ export interface TicketPayment {
   paidAt?: string;
 }
 
+/* ── Payment Ticket Specific ──────────────────────────────────────────── */
+export interface PaymentTicketData {
+  policyIssuedDate?: string;
+  policyNumber?: string;
+  agentName?: string;
+  insuranceCompany?: string;
+  ownerType?: 'OWN' | 'CORPORATE';
+  partnerName?: string;
+  policyType?: PolicyType;
+  policyStatus?: 'Active' | 'Inactive' | 'Renewal';
+  totalPremium?: number;
+  amountPaidByCustomer?: number;
+  balancePremiumAmount?: number;
+  netCommission?: number;
+  marginAmount?: number;
+  offerDiscount?: number;
+  tds?: number;
+  amountReceivableFromCustomer?: number;
+  commissionPercent?: number;
+  commissionStatus?: 'Pending' | 'Approved' | 'Paid';
+  paymentMode?: string;
+  paymentReceivingDate?: string;
+  renewalDueDate?: string;
+  remarks?: string;
+  sourceReferral?: string;
+  commissionToPayReferral?: number;
+  commissionPaymentStatus?: 'Pending' | 'Approved' | 'Paid';
+}
+
+/* ── Office Ticket Specific ──────────────────────────────────────────── */
+export interface OfficeTicketData {
+  workDescription?: string;
+  responsiblePerson?: string;
+  remarks?: string;
+  startDate?: string;
+  endDate?: string;
+  closedDate?: string;
+  comments?: string;
+}
+
+/* ── Other Ticket Specific ───────────────────────────────────────────── */
+export interface OtherTicketData {
+  createdBy?: string;
+  assignedName?: string;
+  remarks?: string;
+  comments?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export interface TicketDocument {
   id: string;
   type: 'RC' | 'Insurance' | 'Other';
@@ -91,6 +144,7 @@ export interface Ticket {
   title: string;
   status: TicketStatus;
   priority: Priority;
+  ticketType: TicketType;
   assignedToId?: string;
   assignedToName?: string;
   dueDate?: string;
@@ -105,6 +159,9 @@ export interface Ticket {
   payment: TicketPayment;
   documents: TicketDocument[];
   activityLog: ActivityLog[];
+  paymentTicketData?: PaymentTicketData;
+  officeTicketData?: OfficeTicketData;
+  otherTicketData?: OtherTicketData;
   createdAt: string;
   updatedAt: string;
 }
@@ -116,6 +173,10 @@ export interface DashboardKPIs {
   expiredPolicies: number;
   premiumCollected: number;
   pendingPayments: number;
+  insuranceTickets: number;
+  paymentTickets: number;
+  officeTickets: number;
+  otherTickets: number;
 }
 
 export interface PaginatedResponse<T> {

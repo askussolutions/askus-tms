@@ -15,28 +15,24 @@ import TicketFormPage from './pages/TicketFormPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import CalendarPage from './pages/CalendarPage';
 import TimesheetPage from './pages/TimesheetPage';
+import InsurancePage from './pages/InsurancePage';
 import type { UserRole } from './types';
 
-// ── Auth guard ────────────────────────────────────────────────────────────────
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const token = sessionStorage.getItem('tms_token');
   return token ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
-// ── Role guard — redirects if role not allowed ────────────────────────────────
 function RoleRoute({ allowed, children }: { allowed: UserRole[]; children: React.ReactNode }) {
   const userRaw = sessionStorage.getItem('tms_user');
   const user = userRaw ? JSON.parse(userRaw) : null;
   const role: UserRole = user?.role ?? 'Agent';
-
   if (!allowed.includes(role)) {
-    // Agent → timesheet, others → dashboard
     return <Navigate to={role === 'Agent' ? '/timesheet' : '/dashboard'} replace />;
   }
   return <>{children}</>;
 }
 
-// ── Default route per role ────────────────────────────────────────────────────
 function RoleHome() {
   const userRaw = sessionStorage.getItem('tms_user');
   const user = userRaw ? JSON.parse(userRaw) : null;
@@ -44,7 +40,6 @@ function RoleHome() {
   return <Navigate to={role === 'Agent' ? '/timesheet' : '/dashboard'} replace />;
 }
 
-// ── Placeholder for unbuilt pages ─────────────────────────────────────────────
 function Placeholder({ title }: { title: string }) {
   return (
     <div style={{ padding: 40, textAlign: 'center', color: '#888' }}>
@@ -61,15 +56,13 @@ export default function App() {
       <ConfigProvider theme={{ token: { colorPrimary: '#C8102E', borderRadius: 8 } }}>
         <BrowserRouter>
           <Routes>
-            <Route path="/login"            element={<LoginPage />} />
-            <Route path="/register"         element={<RegisterPage />} />
-            <Route path="/forgot-password"  element={<ForgotPasswordPage />} />
+            <Route path="/login"           element={<LoginPage />} />
+            <Route path="/register"        element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
             <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              {/* Default redirect based on role */}
               <Route index element={<RoleHome />} />
 
-              {/* ── Admin + Employee ── */}
               <Route path="dashboard" element={
                 <RoleRoute allowed={['Admin', 'Employee']}>
                   <DashboardPage />
@@ -110,15 +103,16 @@ export default function App() {
                   <CalendarPage />
                 </RoleRoute>
               } />
-
-              {/* ── All roles — but TimesheetPage handles per-role view internally ── */}
+              <Route path="insurance" element={
+                <RoleRoute allowed={['Admin', 'Employee', 'Agent']}>
+                  <InsurancePage />
+                </RoleRoute>
+              } />
               <Route path="timesheet" element={
                 <RoleRoute allowed={['Admin', 'Employee', 'Agent']}>
                   <TimesheetPage />
                 </RoleRoute>
               } />
-
-              {/* ── Admin only ── */}
               <Route path="renewals" element={
                 <RoleRoute allowed={['Admin']}>
                   <Placeholder title="Renewals" />

@@ -193,6 +193,31 @@ export default function DashboardPage() {
       {/* KPI cards */}
       <Row gutter={12} style={{ marginBottom: 20 }}>
         {[
+          { label: 'Insurance tickets', value: kpis?.insuranceTickets, color: '#1565C0', delta: 'Insurance queue' },
+          { label: 'Payment tickets', value: kpis?.paymentTickets, color: '#2e7d32', delta: 'Payment follow-up' },
+          { label: 'Office tickets', value: kpis?.officeTickets, color: '#d46b08', delta: 'Internal ops' },
+          { label: 'Other tickets', value: kpis?.otherTickets, color: '#9c27b0', delta: 'Misc tasks' },
+        ].map(k => (
+          <Col span={6} key={k.label}>
+            <Card style={{ borderRadius: 10 }} styles={{ body: { padding: '16px 20px' } }}>
+              {kloading ? <Skeleton active paragraph={false} /> : (
+                <>
+                  <Statistic
+                    title={<span style={{ fontSize: 12 }}>{k.label}</span>}
+                    value={k.value ?? 0}
+                    valueStyle={{ color: k.color, fontWeight: 600, fontSize: 28 }}
+                  />
+                  <div style={{ fontSize: 11, marginTop: 4, color: '#888' }}>
+                    {k.delta}
+                  </div>
+                </>
+              )}
+            </Card>
+          </Col>
+        ))}
+      </Row>
+      <Row gutter={12} style={{ marginBottom: 20 }}>
+        {[
           { label: 'Total tickets', value: kpis?.totalTickets, color: undefined, delta: '↑ 12 this week', up: true },
           { label: 'Open', value: kpis?.openTickets, color: '#1677ff', delta: 'Awaiting action' },
           { label: 'Expiring ≤ 30 days', value: kpis?.expiringIn30Days, color: '#d46b08', delta: '⚠ Renewal needed', warn: true },

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Form, Input, Select, InputNumber, DatePicker, Upload, message, Spin } from 'antd';
-import { UploadOutlined } from '@ant-design/icons';
+import { UploadOutlined, WhatsAppOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { api } from '../api/mockApi';
 import { useMutation } from '../hooks';
-import type { Ticket } from '../types';
+import { renderTicketTypeFields } from '../components/TicketTypeForm';
+import type { Ticket, TicketType, PaymentTicketData, OfficeTicketData, OtherTicketData } from '../types';
 import type { Dayjs } from 'dayjs';
 
 export default function TicketFormPage() {
@@ -13,6 +14,7 @@ export default function TicketFormPage() {
   const navigate = useNavigate();
   const { id } = useParams<{ id?: string }>();
   const isEdit = Boolean(id);
+  const [ticketType, setTicketType] = useState<TicketType>('Insurance');
 
   const [loadingTicket, setLoadingTicket] = useState(isEdit);
   const { mutate: create, loading: creating } = useMutation(api.createTicket);
@@ -26,30 +28,87 @@ export default function TicketFormPage() {
       try {
         const t = await api.getTicketById(id);
         if (!t) { message.error('Ticket not found'); navigate('/tickets'); return; }
+        setTicketType(t.ticketType);
         const [makePart, ...modelParts] = (t.vehicleName ?? '').split(' ');
-        form.setFieldsValue({
+        const baseValues: Record<string, any> = {
           vehicleRegNo:    t.vehicleRegNo,
           make:            makePart ?? '',
           model:           modelParts.join(' '),
           ownerName:       t.customerName,
           mobile:          t.customerMobile,
-          insurer:         t.policy.insurer,
-          policyType:      t.policy.policyType,
-          policyNumber:    t.policy.policyNumber,
-          idv:             t.policy.idv,
-          netPremium:      t.policy.netPremium,
-          ncb:             t.policy.ncbPercent,
-          startDate:       t.policy.startDate  ? dayjs(t.policy.startDate)  : undefined,
-          expiryDate:      t.policy.expiryDate ? dayjs(t.policy.expiryDate) : undefined,
-          renewalDate:     t.policy.renewalDate ? dayjs(t.policy.renewalDate) : undefined,
-          insuranceStatus: t.policy.insuranceStatus,
-          paymentStatus:   t.payment.paymentStatus,
+          ticketType:      t.ticketType,
           priority:        t.priority,
           status:          t.status,
           assignedTo:      t.assignedToName,
           dueDate:         t.dueDate ? dayjs(t.dueDate) : undefined,
           notes:           t.internalNotes,
-        });
+        };
+
+        if (t.ticketType === 'Insurance') {
+          form.setFieldsValue({
+            ...baseValues,
+            insurer:         t.policy.insurer,
+            policyType:      t.policy.policyType,
+            policyNumber:    t.policy.policyNumber,
+            idv:             t.policy.idv,
+            netPremium:      t.policy.netPremium,
+            ncb:             t.policy.ncbPercent,
+            startDate:       t.policy.startDate  ? dayjs(t.policy.startDate)  : undefined,
+            expiryDate:      t.policy.expiryDate ? dayjs(t.policy.expiryDate) : undefined,
+            insuranceStatus: t.policy.insuranceStatus,
+            paymentStatus:   t.payment.paymentStatus,
+          });
+        } else if (t.ticketType === 'Payment' && t.paymentTicketData) {
+          form.setFieldsValue({
+            ...baseValues,
+            policyIssuedDate: t.paymentTicketData.policyIssuedDate ? dayjs(t.paymentTicketData.policyIssuedDate) : undefined,
+            policyNumber: t.paymentTicketData.policyNumber,
+            agentName: t.paymentTicketData.agentName,
+            insuranceCompany: t.paymentTicketData.insuranceCompany,
+            ownerType: t.paymentTicketData.ownerType,
+            partnerName: t.paymentTicketData.partnerName,
+            policyType: t.paymentTicketData.policyType,
+            policyStatus: t.paymentTicketData.policyStatus,
+            totalPremium: t.paymentTicketData.totalPremium,
+            amountPaidByCustomer: t.paymentTicketData.amountPaidByCustomer,
+            balancePremiumAmount: t.paymentTicketData.balancePremiumAmount,
+            netCommission: t.paymentTicketData.netCommission,
+            marginAmount: t.paymentTicketData.marginAmount,
+            offerDiscount: t.paymentTicketData.offerDiscount,
+            tds: t.paymentTicketData.tds,
+            amountReceivableFromCustomer: t.paymentTicketData.amountReceivableFromCustomer,
+            commissionPercent: t.paymentTicketData.commissionPercent,
+            commissionStatus: t.paymentTicketData.commissionStatus,
+            paymentMode: t.paymentTicketData.paymentMode,
+            paymentReceivingDate: t.paymentTicketData.paymentReceivingDate ? dayjs(t.paymentTicketData.paymentReceivingDate) : undefined,
+            renewalDueDate: t.paymentTicketData.renewalDueDate ? dayjs(t.paymentTicketData.renewalDueDate) : undefined,
+            remarks: t.paymentTicketData.remarks,
+            sourceReferral: t.paymentTicketData.sourceReferral,
+            commissionToPayReferral: t.paymentTicketData.commissionToPayReferral,
+            commissionPaymentStatus: t.paymentTicketData.commissionPaymentStatus,
+          });
+        } else if (t.ticketType === 'Office' && t.officeTicketData) {
+          form.setFieldsValue({
+            ...baseValues,
+            workDescription: t.officeTicketData.workDescription,
+            responsiblePerson: t.officeTicketData.responsiblePerson,
+            remarks: t.officeTicketData.remarks,
+            startDate: t.officeTicketData.startDate ? dayjs(t.officeTicketData.startDate) : undefined,
+            endDate: t.officeTicketData.endDate ? dayjs(t.officeTicketData.endDate) : undefined,
+            closedDate: t.officeTicketData.closedDate ? dayjs(t.officeTicketData.closedDate) : undefined,
+            comments: t.officeTicketData.comments,
+          });
+        } else if (t.ticketType === 'Other' && t.otherTicketData) {
+          form.setFieldsValue({
+            ...baseValues,
+            createdBy: t.otherTicketData.createdBy,
+            assignedName: t.otherTicketData.assignedName,
+            remarks: t.otherTicketData.remarks,
+            comments: t.otherTicketData.comments,
+            startDate: t.otherTicketData.startDate ? dayjs(t.otherTicketData.startDate) : undefined,
+            endDate: t.otherTicketData.endDate ? dayjs(t.otherTicketData.endDate) : undefined,
+          });
+        }
       } catch {
         message.error('Failed to load ticket');
       } finally {
@@ -59,13 +118,10 @@ export default function TicketFormPage() {
   }, [id, isEdit, form, navigate]);
 
   const onFinish = async (vals: Record<string, unknown>) => {
-    const startDate  = (vals.startDate  as Dayjs)?.format('YYYY-MM-DD') ?? '';
-    const expiryDate = (vals.expiryDate as Dayjs)?.format('YYYY-MM-DD') ?? '';
-    const net = (vals.netPremium as number) ?? 0;
-
-    const payload: Partial<Ticket> = {
-      title: `${vals.vehicleRegNo ?? 'New'} — ${vals.insurer ?? 'Policy'}`,
+    const basePayload: Partial<Ticket> = {
+      title: `${vals.vehicleRegNo ?? 'New'} — ${ticketType}`,
       priority: vals.priority as Ticket['priority'],
+      ticketType: vals.ticketType as Ticket['ticketType'],
       status:   vals.status   as Ticket['status'],
       vehicleRegNo:   vals.vehicleRegNo as string ?? '',
       vehicleName:    `${vals.make ?? ''} ${vals.model ?? ''}`.trim(),
@@ -74,28 +130,129 @@ export default function TicketFormPage() {
       internalNotes:  vals.notes     as string,
       policy: {
         id: '', insurer: vals.insurer as string ?? '',
-        policyType:   vals.policyType as Ticket['policy']['policyType'],
+        policyType:   vals.policyType as Ticket['policy']['policyType'] ?? 'Comprehensive',
         policyNumber: vals.policyNumber as string,
         idv:          vals.idv as number,
-        netPremium:   net,
-        gst:          Math.round(net * 0.18),
-        totalPremium: Math.round(net * 1.18),
+        netPremium:   (vals.netPremium as number) ?? 0,
+        gst:          Math.round(((vals.netPremium as number) ?? 0) * 0.18),
+        totalPremium: Math.round(((vals.netPremium as number) ?? 0) * 1.18),
         ncbPercent:   vals.ncb as number ?? 0,
-        startDate, expiryDate,
+        startDate: (vals.startDate as Dayjs)?.format('YYYY-MM-DD') ?? '',
+        expiryDate: (vals.expiryDate as Dayjs)?.format('YYYY-MM-DD') ?? '',
         insuranceStatus: vals.insuranceStatus as Ticket['policy']['insuranceStatus'] ?? 'Active',
       },
       payment: {
-        amount:        Math.round(net * 1.18),
+        amount:        Math.round(((vals.netPremium as number) ?? 0) * 1.18),
         paymentStatus: vals.paymentStatus as Ticket['payment']['paymentStatus'] ?? 'Pending',
       },
     };
 
+    if (ticketType === 'Payment') {
+      const paymentData: PaymentTicketData = {
+        policyIssuedDate: (vals.policyIssuedDate as Dayjs)?.format('YYYY-MM-DD'),
+        policyNumber: vals.policyNumber as string,
+        agentName: vals.agentName as string,
+        insuranceCompany: vals.insuranceCompany as string,
+        ownerType: vals.ownerType as 'OWN' | 'CORPORATE',
+        partnerName: vals.partnerName as string,
+        policyType: vals.policyType as Ticket['policy']['policyType'],
+        policyStatus: vals.policyStatus as string,
+        totalPremium: vals.totalPremium as number,
+        amountPaidByCustomer: vals.amountPaidByCustomer as number,
+        balancePremiumAmount: vals.balancePremiumAmount as number,
+        netCommission: vals.netCommission as number,
+        marginAmount: vals.marginAmount as number,
+        offerDiscount: vals.offerDiscount as number,
+        tds: vals.tds as number,
+        amountReceivableFromCustomer: vals.amountReceivableFromCustomer as number,
+        commissionPercent: vals.commissionPercent as number,
+        commissionStatus: vals.commissionStatus as 'Pending' | 'Approved' | 'Paid',
+        paymentMode: vals.paymentMode as string,
+        paymentReceivingDate: (vals.paymentReceivingDate as Dayjs)?.format('YYYY-MM-DD'),
+        renewalDueDate: (vals.renewalDueDate as Dayjs)?.format('YYYY-MM-DD'),
+        remarks: vals.remarks as string,
+        sourceReferral: vals.sourceReferral as string,
+        commissionToPayReferral: vals.commissionToPayReferral as number,
+        commissionPaymentStatus: vals.commissionPaymentStatus as 'Pending' | 'Approved' | 'Paid',
+      };
+      basePayload.paymentTicketData = paymentData;
+      basePayload.title = `${vals.policyNumber ?? 'Policy'} - ${vals.agentName ?? 'Agent'}`;
+    } else if (ticketType === 'Office') {
+      const officeData: OfficeTicketData = {
+        workDescription: vals.workDescription as string,
+        responsiblePerson: vals.responsiblePerson as string,
+        remarks: vals.remarks as string,
+        startDate: (vals.startDate as Dayjs)?.format('YYYY-MM-DD'),
+        endDate: (vals.endDate as Dayjs)?.format('YYYY-MM-DD'),
+        closedDate: (vals.closedDate as Dayjs)?.format('YYYY-MM-DD'),
+        comments: vals.comments as string,
+      };
+      basePayload.officeTicketData = officeData;
+      basePayload.title = vals.workDescription as string;
+    } else if (ticketType === 'Other') {
+      const otherData: OtherTicketData = {
+        createdBy: vals.createdBy as string,
+        assignedName: vals.assignedName as string,
+        remarks: vals.remarks as string,
+        comments: vals.comments as string,
+        startDate: (vals.startDate as Dayjs)?.format('YYYY-MM-DD'),
+        endDate: (vals.endDate as Dayjs)?.format('YYYY-MM-DD'),
+      };
+      basePayload.otherTicketData = otherData;
+      basePayload.title = `Ticket - ${vals.createdBy ?? 'Created'}`;
+    }
+
     if (isEdit && id) {
-      const t = await update(id, payload);
+      const t = await update(id, basePayload);
       if (t) { message.success('Ticket updated successfully!'); navigate(`/tickets/${id}`); }
     } else {
-      const t = await create(payload);
+      const t = await create(basePayload);
       if (t) { message.success('Ticket created successfully!'); navigate(`/tickets/${t.id}`); }
+    }
+  };
+
+  const sendWhatsApp = async () => {
+    try {
+      const values = await form.validateFields([
+        'vehicleRegNo',
+        'ownerName',
+        'mobile',
+        'insurer',
+        'policyType',
+        'netPremium',
+        'startDate',
+        'expiryDate',
+      ]);
+
+      const phoneRaw = String(values.mobile || '');
+      const digits = phoneRaw.replace(/\D/g, '');
+      const phone = digits.length === 10 ? `91${digits}` : digits;
+      if (!/^\d{12}$/.test(phone)) {
+        message.error('Enter a valid 10-digit mobile number');
+        return;
+      }
+
+      const msg = [
+        'Hello,',
+        'I would like to submit an insurance application with the following details:',
+        `Registration No: ${values.vehicleRegNo ?? 'N/A'}`,
+        `Owner Name: ${values.ownerName ?? 'N/A'}`,
+        `Mobile: ${values.mobile ?? 'N/A'}`,
+        `Insurer: ${values.insurer ?? 'N/A'}`,
+        `Policy Type: ${values.policyType ?? 'N/A'}`,
+        `Net Premium: ₹${Number(values.netPremium ?? 0).toLocaleString('en-IN')}`,
+        `Start Date: ${(values.startDate as any)?.format ? (values.startDate as any).format('DD/MM/YYYY') : values.startDate}`,
+        `Expiry Date: ${(values.expiryDate as any)?.format ? (values.expiryDate as any).format('DD/MM/YYYY') : values.expiryDate}`,
+        '',
+        'Please contact me with the next steps.',
+      ].join('\n');
+
+      const url = `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
+      window.open(url, '_blank');
+    } catch (err) {
+      if (err && typeof err === 'object' && 'errorFields' in err) {
+        message.error('Please complete the required fields before sending to WhatsApp.');
+      }
     }
   };
 
@@ -171,8 +328,24 @@ export default function TicketFormPage() {
             </div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {!isEdit && <button style={ghostBtn} onClick={() => form.resetFields()}>Clear form</button>}
+          <button
+            type="button"
+            style={{
+              ...ghostBtn,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              color: '#25D366',
+              borderColor: '#B7F0C2',
+              background: '#f4fff8',
+            }}
+            onClick={sendWhatsApp}
+          >
+            <WhatsAppOutlined style={{ fontSize: 16 }} />
+            Send via WhatsApp
+          </button>
           <button
             style={{ ...primaryBtn, opacity: loading ? 0.8 : 1 }}
             onClick={() => form.submit()}
@@ -184,7 +357,7 @@ export default function TicketFormPage() {
       </div>
 
       <Form form={form} layout="vertical" onFinish={onFinish}
-        initialValues={{ priority:'High', status:'Open', ncb:0, insuranceStatus:'Active', paymentStatus:'Pending' }}>
+        initialValues={{ priority:'High', status:'Open', ticketType:'Insurance', ncb:0, insuranceStatus:'Active', paymentStatus:'Pending' }}>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 16, alignItems: 'start' }}>
 
@@ -254,6 +427,13 @@ export default function TicketFormPage() {
             <div style={card}>
               <div style={cardTitle}>🛡️ Insurance Details</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
+                <Form.Item name="ticketType" rules={[{ required:true, message:'Required' }]} style={{ marginBottom: 14 }}>
+                  <label style={lbl}>Ticket Type <span style={{ color:'#f5222d' }}>*</span></label>
+                  <Select placeholder="Select…" style={fw}>
+                    {['Insurance','Payment','Office','Other'].map(t =>
+                      <Select.Option key={t} value={t}>{t}</Select.Option>)}
+                  </Select>
+                </Form.Item>
                 <Form.Item name="insurer" rules={[{ required:true, message:'Required' }]} style={{ marginBottom: 14 }}>
                   <label style={lbl}>Insurer <span style={{ color:'#f5222d' }}>*</span></label>
                   <Select placeholder="Select…" style={fw}>
